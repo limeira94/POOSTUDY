@@ -1,90 +1,64 @@
+from abc import ABC
+
 import pytest
+
+from adt import IntervalMap
 from binary import Byte, adder, multiplier, Word, Tribyte, DoubleWord
 
 
-class Int8:
+class Integer(ABC):
+    STORAGE = bytes
+    types = IntervalMap()
+
     def __init__(self, n):
-        self.value = Byte(n)
+        self.value = self.STORAGE(n)
 
     def __add__(self, other):
-        sum_ = adder(self.value, other.value)
-        if 0 <= sum_ < 256:
-            return Int8(sum_)
-        else:
-            return Int16(sum_)
+        return self.factory(adder(self.value, other.value))
 
     def __eq__(self, other):
         return self.value == other.value
 
     def __mul__(self, other):
-        p = multiplier(self.value, other.value)
-        if 0 <= p < 256:
-            return Int8(p)
-        else:
-            return Int16(p)
+        return self.factory(multiplier(self.value, other.value))
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.value!r})'
 
+    @classmethod
+    def factory(cls, n):
+        klass = cls.types.get(n)
+        return klass(n)
 
-class Int16:
-    def __init__(self, n):
-        self.value = Word(n)
-
-    def __add__(self, other):
-        sum_ = adder(self.value, other.value)
-        if 0 <= sum_ < 65536:
-            return Int16(sum_)
-        else:
-            return Int24(sum_)
-
-    def __eq__(self, other):
-        return self.value == other.value
-
-    def __mul__(self, other):
-        p = multiplier(self.value, other.value)
-        if 0 <= p < 65536:
-            return Int16(p)
-        else:
-            return Int24(p)
+    @classmethod
+    def register(cls, upper_bound, klass):
+        cls.types[upper_bound] = klass
 
 
-class Int24:
-    def __init__(self, n):
-        self.value = Tribyte(n)
-
-    def __add__(self, other):
-        sum_ = adder(self.value, other.value)
-        if 0 <= sum_ < 16_777_216:
-            return Int24(sum_)
-        else:
-            return Int32(sum_)
-
-    def __eq__(self, other):
-        return self.value == other.value
-
-    def __mul__(self, other):
-        p = multiplier(self.value, other.value)
-        if 0 <= p < 16_777_216:
-            return Int24(p)
-        else:
-            return Int32(p)
+def Int(n):
+    return Integer.factory(n)
 
 
-class Int32:
-    def __init__(self, n):
-        self.value = DoubleWord(n)
+class Int8(Integer):
+    STORAGE = Byte
 
-    def __add__(self, other):
-        sum_ = adder(self.value, other.value)
-        return Int32(sum_)
 
-    def __eq__(self, other):
-        return self.value == other.value
+class Int16(Integer):
+    STORAGE = Word
 
-    def __mul__(self, other):
-        return Int32(multiplier(self.value, other.value))
 
+class Int24(Integer):
+    STORAGE = Tribyte
+
+
+class Int32(Integer):
+    STORAGE = DoubleWord
+
+
+Integer.register(256, Int8)
+Integer.register(65536, Int16)
+Integer.register(16_777_216, Int24)
+Integer.register(4_294_967_296, Int32)
 
 
 def test_int8():
@@ -145,3 +119,12 @@ def test_scale_up():
 
     assert Int24(16_777_215) + Int24(1) == Int32(16_777_216)
     assert Int24(8_388_608) * Int24(2) == Int32(16_777_216)
+
+def test_scale_down():
+    assert isinstance(Int8(254) + Int8(1), Int8)
+
+    assert isinstance(Int16(254) + Int16(1), Int8)
+
+    assert isinstance(Int24(65534) + Int24(1), Int16)
+
+    assert isinstance(Int32(16_777_214) + Int32(1), Int24)
